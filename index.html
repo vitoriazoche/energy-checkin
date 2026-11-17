@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-in de Energéticos</title>
+<script>
+  // aplica o tema antes de renderizar, para evitar flash
+  (function(){
+    var t = localStorage.getItem('checkin-tema') ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--text:#14161f;--muted:#6b7183;--line:#e3e6ef;--accent:#16a34a;--accent-t:#fff;--danger:#dc2626;--bar:#bbf7d0}
+  :root[data-theme=dark]{--bg:#0d0f14;--card:#161a22;--text:#eef0f6;--muted:#8d94a7;--line:#262b37;--accent:#4ade80;--accent-t:#06210f;--danger:#f87171;--bar:#14532d}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+  header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;max-width:720px;margin:0 auto}
+  .logo{font-weight:800;letter-spacing:-.02em}
+  .logo span{color:var(--accent)}
+  main{max-width:720px;margin:0 auto;padding:0 18px 48px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+  h1{font-size:clamp(1.7rem,6vw,2.4rem);line-height:1.15;margin:8px 0 10px;letter-spacing:-.03em}
+  h2{font-size:1.05rem;margin:0 0 12px}
+  p.muted,.muted{color:var(--muted)}
+  label{display:block;font-size:.85rem;font-weight:600;margin:12px 0 6px}
+  input,select,button{font:inherit;color:inherit}
+  input,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg)}
+  input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .btn{width:100%;margin-top:16px;padding:13px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-t);font-weight:700;cursor:pointer}
+  .ghost{background:none;border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer}
+  .link{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:6px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .weeknav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px}
+  .weeknav strong{text-align:center;flex:1}
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .stat{background:var(--bg);border-radius:12px;padding:12px}
+  .stat b{display:block;font-size:1.35rem}
+  .stat small{color:var(--muted)}
+  .chart{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:130px;margin-top:6px}
+  .col{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;font-size:.72rem;color:var(--muted)}
+  .bar{width:100%;max-width:34px;background:var(--accent);border-radius:6px 6px 0 0;min-height:3px}
+  .bar.zero{background:var(--bar)}
+  .col.hoje b{color:var(--accent)}
+  .dia{margin-top:14px}
+  .dia h3{font-size:.9rem;margin:0 0 6px;color:var(--muted)}
+  .item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+  .item button{background:none;border:0;color:var(--danger);cursor:pointer;padding:6px 8px}
+  .aviso{background:var(--bg);border-left:4px solid var(--danger);padding:10px 12px;border-radius:8px;font-size:.88rem;margin-bottom:16px}
+  .empty{text-align:center;padding:20px 0}
+  [hidden]{display:none!important}
+  @media(min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">⚡ Check<span>-in</span></div>
+  <button class="ghost" id="tema" aria-label="Alternar tema escuro">🌙</button>
+</header>
+
+<main>
+  <!-- BOAS-VINDAS -->
+  <section id="welcome">
+    <h1>Quantos energéticos você tomou nesta semana?</h1>
+    <p class="muted">Faça um check-in rápido: marca, quantidade e dia da semana. Sem login. Seus dados ficam só neste aparelho.</p>
+    <form class="card" id="formUser">
+      <label for="nome">Seu nome</label>
+      <input id="nome" required maxlength="40" autocomplete="given-name" placeholder="Como você quer ser chamado(a)">
+      <label for="nasc">Data de nascimento</label>
+      <input id="nasc" type="date" required>
+      <button class="btn" type="submit">Começar</button>
+    </form>
+  </section>
+
+  <!-- APP -->
+  <section id="app" hidden>
+    <h1 id="ola"></h1>
+    <div class="aviso" id="avisoMenor" hidden>Energéticos não são recomendados para menores de 18 anos. Vale conversar com um responsável ou profissional de saúde.</div>
+
+    <div class="weeknav">
+      <button class="ghost" id="prev" aria-label="Semana anterior">←</button>
+      <strong id="semana"></strong>
+      <button class="ghost" id="next" aria-label="Próxima semana">→</button>
+    </div>
+
+    <div class="card">
+      <h2>Resumo da semana</h2>
+      <div class="stats" id="stats"></div>
+      <div class="chart" id="chart" aria-label="Latas por dia"></div>
+    </div>
+
+    <form class="card" id="formItem">
+      <h2>Adicionar energético</h2>
+      <label for="marca">Marca</label>
+      <select id="marca">
+        <option>Monster</option><option>Red Bull</option><option>Burn</option>
+        <option>TNT</option><option>Fusion</option><option>Flying Horse</option>
+        <option>Baly</option><option value="__outra">Outra...</option>
+      </select>
+      <input id="marcaOutra" placeholder="Qual marca?" maxlength="30" hidden style="margin-top:8px">
+      <div class="grid2">
+        <div>
+          <label for="ml">Tamanho</label>
+          <select id="ml">
+            <option value="269">269 ml</option><option value="310">310 ml</option>
+            <option value="350">350 ml</option><option value="473" selected>473 ml</option>
+            <option value="500">500 ml</option>
+          </select>
+        </div>
+        <div>
+          <label for="qtd">Quantidade</label>
+          <input id="qtd" type="number" min="1" max="20" value="1" inputmode="numeric" required>
+        </div>
+      </div>
+      <label for="dia">Dia da semana</label>
+      <select id="dia"></select>
+      <button class="btn" type="submit">Adicionar</button>
+    </form>
+
+    <div class="card">
+      <h2>Registros</h2>
+      <div id="lista"></div>
+    </div>
+
+    <div style="text-align:center">
+      <button class="link" id="reset">Apagar meus dados</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const KEY = 'checkin-energeticos-v1';
+const DIAS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+const ABREV = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+const $ = s => document.querySelector(s);
+let db = JSON.parse(localStorage.getItem(KEY) || 'null') || { user: null, entries: [] };
+const save = () => localStorage.setItem(KEY, JSON.stringify(db));
+
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const segunda = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - (x.getDay()+6)%7); return x; };
+const addDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const fmt = d => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let cur = segunda(new Date());
+const hojeIdx = () => (new Date().getDay()+6)%7;
+const ehSemanaAtual = () => iso(cur) === iso(segunda(new Date()));
+
+function idade(nasc){
+  const n = new Date(nasc + 'T00:00:00'), h = new Date();
+  let a = h.getFullYear() - n.getFullYear();
+  if (h < new Date(h.getFullYear(), n.getMonth(), n.getDate())) a--;
+  return a;
+}
+
+function render(){
+  $('#welcome').hidden = !!db.user;
+  $('#app').hidden = !db.user;
+  if (!db.user) return;
+
+  $('#ola').textContent = `Olá, ${db.user.nome}!`;
+  $('#avisoMenor').hidden = idade(db.user.nasc) >= 18;
+  $('#semana').textContent = `${fmt(cur)} a ${fmt(addDias(cur, 6))}`;
+
+  const lista = db.entries.filter(e => e.week === iso(cur));
+  const porDia = Array(7).fill(0);
+  const porMarca = {};
+  let ml = 0, total = 0;
+  lista.forEach(e => {
+    porDia[e.dia] += e.qtd; total += e.qtd; ml += e.qtd * e.ml;
+    porMarca[e.marca] = (porMarca[e.marca] || 0) + e.qtd;
+  });
+  const topMarca = Object.entries(porMarca).sort((a,b) => b[1]-a[1])[0];
+  const max = Math.max(...porDia);
+  const diaTop = max > 0 ? DIAS[porDia.indexOf(max)] : '-';
+
+  $('#stats').innerHTML = `
+    <div class="stat"><b>${total}</b><small>latas</small></div>
+    <div class="stat"><b>${(ml/1000).toFixed(2).replace('.', ',')} L</b><small>volume total</small></div>
+    <div class="stat"><b>${topMarca ? esc(topMarca[0]) : '-'}</b><small>marca mais tomada</small></div>
+    <div class="stat"><b>${diaTop}</b><small>dia mais pesado</small></div>`;
+
+  $('#chart').innerHTML = porDia.map((v, i) => `
+    <div class="col ${ehSemanaAtual() && i === hojeIdx() ? 'hoje' : ''}">
+      <b>${v || ''}</b>
+      <div class="bar ${v ? '' : 'zero'}" style="height:${max ? (v/max)*85 : 0}%"></div>
+      <span>${ABREV[i]}</span>
+    </div>`).join('');
+
+  if (!lista.length){
+    $('#lista').innerHTML = '<p class="muted empty">Nenhum registro nesta semana.</p>';
+    return;
+  }
+  $('#lista').innerHTML = DIAS.map((nome, i) => {
+    const itens = lista.filter(e => e.dia === i);
+    if (!itens.length) return '';
+    return `<div class="dia"><h3>${nome}, ${fmt(addDias(cur, i))}</h3>` +
+      itens.map(e => `
+        <div class="item">
+          <span><b>${e.qtd}×</b> ${esc(e.marca)} <span class="muted">${e.ml} ml</span></span>
+          <button data-del="${e.id}" aria-label="Remover">Remover</button>
+        </div>`).join('') + '</div>';
+  }).join('');
+}
+
+// dias no select
+$('#dia').innerHTML = DIAS.map((d, i) => `<option value="${i}">${d}</option>`).join('');
+$('#dia').value = hojeIdx();
+$('#nasc').max = iso(new Date());
+
+// eventos
+$('#formUser').addEventListener('submit', e => {
+  e.preventDefault();
+  db.user = { nome: $('#nome').value.trim(), nasc: $('#nasc').value };
+  save(); render();
+});
+
+$('#marca').addEventListener('change', e => {
+  const outra = e.target.value === '__outra';
+  $('#marcaOutra').hidden = !outra;
+  $('#marcaOutra').required = outra;
+});
+
+$('#formItem').addEventListener('submit', e => {
+  e.preventDefault();
+  const marca = $('#marca').value === '__outra' ? $('#marcaOutra').value.trim() : $('#marca').value;
+  if (!marca) return;
+  db.entries.push({
+    id: Date.now(), week: iso(cur), dia: +$('#dia').value,
+    marca, ml: +$('#ml').value, qtd: Math.max(1, +$('#qtd').value || 1)
+  });
+  save(); $('#qtd').value = 1; $('#marcaOutra').value = ''; render();
+});
+
+$('#lista').addEventListener('click', e => {
+  const id = e.target.dataset.del;
+  if (!id) return;
+  db.entries = db.entries.filter(x => x.id !== +id);
+  save(); render();
+});
+
+$('#prev').onclick = () => { cur = addDias(cur, -7); render(); };
+$('#next').onclick = () => { cur = addDias(cur, 7); render(); };
+
+$('#reset').onclick = () => {
+  if (confirm('Isso apaga seu usuário e todos os registros deste aparelho. Continuar?')){
+    localStorage.removeItem(KEY);
+    db = { user: null, entries: [] };
+    render();
+  }
+};
+
+// tema
+const raiz = document.documentElement;
+const iconeTema = () => $('#tema').textContent = raiz.dataset.theme === 'dark' ? '☀️' : '🌙';
+$('#tema').onclick = () => {
+  raiz.dataset.theme = raiz.dataset.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('checkin-tema', raiz.dataset.theme);
+  iconeTema();
+};
+iconeTema();
+render();
+</script>
+</body>
+</html>
